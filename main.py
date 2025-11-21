@@ -2,6 +2,7 @@ import streamlit as st
 import joblib
 import os
 import sklearn
+import pandas as pd
 
 st.set_page_config(page_title="DEBUG MODE", page_icon="🧪", layout="centered")
 
@@ -21,12 +22,4 @@ st.code(sklearn.__version__)
 st.subheader("📁 Current Working Directory")
 st.code(os.getcwd())
 
-st.subheader("📂 Files in Directory")
-st.code(os.listdir())
-
-# ==========================================================
-# TRY LOADING MODELS
-# ==========================================================
-def try_load(file):
-    st.write(f"### 🔍 Testing load for: `{file}`")
-    if file not in os.listd
+st.subheader("📂 Files in Dir
