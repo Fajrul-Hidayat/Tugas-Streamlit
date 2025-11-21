@@ -1,6 +1,7 @@
 import streamlit as st
 import joblib
 import pandas as pd
+from sklearn.ensemble import VotingClassifier
 
 st.set_page_config(
     page_title="Bank Marketing Prediction",
@@ -14,46 +15,38 @@ st.set_page_config(
 @st.cache_resource
 def load_models():
     try:
-        lr = joblib.load("model_logreg.pkl")
-        rf = joblib.load("model_randomforest.pkl")
-        vote = joblib.load("model_voting.pkl")
-        return lr, rf, vote
+        model_lr = joblib.load("model_logreg.pkl")
+        model_gb = joblib.load("model_gb.pkl")
+        preprocessor = joblib.load("preprocessor.pkl")
+        return model_lr, model_gb, preprocessor
     except:
         return None, None, None
 
-model_lr, model_rf, model_voting = load_models()
+model_lr, model_gb, preprocessor = load_models()
 
-
-# ===============================
-# Title
-# ===============================
 st.title("💰 Bank Marketing Prediction App")
 st.markdown("Prediksi apakah nasabah akan mengambil **term deposit** berdasarkan data marketing bank.")
 
-if not all([model_lr, model_rf, model_voting]):
+if model_lr is None or model_gb is None or preprocessor is None:
     st.error("❌ Model tidak ditemukan. Pastikan file .pkl berada dalam folder yang benar.")
     st.stop()
 
-st.sidebar.title("📊 Model Performance")
-st.sidebar.write("Akurasi Model:")
-st.sidebar.success("Logistic Regression: >90% (estimasi)")
-st.sidebar.success("Random Forest: >92% (estimasi)")
-st.sidebar.success("Voting Ensemble: >93% (estimasi)")
-
+# Sidebar
+st.sidebar.title("📊 Model Selection")
 model_choice = st.sidebar.selectbox(
     "Pilih Model",
-    ["Logistic Regression", "Random Forest", "Voting Ensemble"]
+    ["Logistic Regression", "Gradient Boosting", "Voting Ensemble"]
 )
-
-st.markdown("### 📝 Isi Form Berikut")
 
 # ===============================
 # Input Form
 # ===============================
+st.markdown("### 📝 Masukkan Data Nasabah")
+
 col1, col2 = st.columns(2)
 
 with col1:
-    age = st.number_input("Age", min_value=18, max_value=100, value=30)
+    age = st.number_input("Age", min_value=18, max_value=99, value=30)
     job = st.selectbox("Job", [
         "admin.","blue-collar","entrepreneur","housemaid","management",
         "retired","self-employed","services","student","technician",
@@ -76,12 +69,10 @@ month = st.selectbox("Month", [
 ])
 campaign = st.number_input("Campaign Calls", value=1)
 pdays = st.number_input("Days Passed After Campaign (-1 = never)", value=-1)
-previous = st.number_input("Number of Previous Contacts", value=0)
+previous = st.number_input("Previous Contacts", value=0)
 poutcome = st.selectbox("Previous Outcome", ["success", "failure", "nonexistent"])
 
-# ===============================
-# Convert Input to DataFrame
-# ===============================
+# Convert to DataFrame
 input_data = pd.DataFrame([{
     "age": age,
     "job": job,
@@ -101,22 +92,34 @@ input_data = pd.DataFrame([{
     "poutcome": poutcome
 }])
 
+# ===============================
+# Prediction
+# ===============================
 st.markdown("### 🔍 Prediksi")
 
 if st.button("Predict"):
     try:
         if model_choice == "Logistic Regression":
             pred = model_lr.predict(input_data)[0]
-        elif model_choice == "Random Forest":
-            pred = model_rf.predict(input_data)[0]
+
+        elif model_choice == "Gradient Boosting":
+            pred = model_gb.predict(input_data)[0]
+
         else:
-            pred = model_voting.predict(input_data)[0]
+            voting_model = VotingClassifier(
+                estimators=[
+                    ("lr", model_lr),
+                    ("gb", model_gb)
+                ],
+                voting="hard"
+            )
+            voting_model.fit([[0]], ["no"])  # dummy fit (required by VotingClassifier API)
+            pred = voting_model.predict(input_data)[0]
 
         if pred == "yes":
-            st.success("💚 Nasabah **BERMINAT** mengambil term deposit.")
+            st.success("💚 Nasabah BERMINAT mengambil term deposit.")
         else:
-            st.error("❤️‍🩹 Nasabah **TIDAK TERTARIK** mengambil term deposit.")
+            st.error("❤️‍🩹 Nasabah TIDAK tertarik mengambil term deposit.")
 
     except Exception as e:
-        st.error(f"❌ Error saat prediksi: {e}")
-
+        st.error(f"❌ Error: {e}")
