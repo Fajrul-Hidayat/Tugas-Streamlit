@@ -1,7 +1,6 @@
 import streamlit as st
 import joblib
 import pandas as pd
-from sklearn.ensemble import VotingClassifier
 
 st.set_page_config(
     page_title="Bank Marketing Prediction",
@@ -9,38 +8,30 @@ st.set_page_config(
     layout="centered"
 )
 
-# ===============================
-# Load Models
-# ===============================
 @st.cache_resource
 def load_models():
     try:
         model_lr = joblib.load("model_logreg.pkl")
         model_gb = joblib.load("model_gb.pkl")
-        preprocessor = joblib.load("preprocessor.pkl")
-        return model_lr, model_gb, preprocessor
+        return model_lr, model_gb
     except:
-        return None, None, None
+        return None, None
 
-model_lr, model_gb, preprocessor = load_models()
+model_lr, model_gb = load_models()
 
 st.title("💰 Bank Marketing Prediction App")
 st.markdown("Prediksi apakah nasabah akan mengambil **term deposit** berdasarkan data marketing bank.")
 
-if model_lr is None or model_gb is None or preprocessor is None:
+if model_lr is None or model_gb is None:
     st.error("❌ Model tidak ditemukan. Pastikan file .pkl berada dalam folder yang benar.")
     st.stop()
 
-# Sidebar
 st.sidebar.title("📊 Model Selection")
 model_choice = st.sidebar.selectbox(
     "Pilih Model",
     ["Logistic Regression", "Gradient Boosting", "Voting Ensemble"]
 )
 
-# ===============================
-# Input Form
-# ===============================
 st.markdown("### 📝 Masukkan Data Nasabah")
 
 col1, col2 = st.columns(2)
@@ -72,29 +63,12 @@ pdays = st.number_input("Days Passed After Campaign (-1 = never)", value=-1)
 previous = st.number_input("Previous Contacts", value=0)
 poutcome = st.selectbox("Previous Outcome", ["success", "failure", "nonexistent"])
 
-# Convert to DataFrame
 input_data = pd.DataFrame([{
-    "age": age,
-    "job": job,
-    "marital": marital,
-    "education": education,
-    "default": default,
-    "balance": balance,
-    "housing": housing,
-    "loan": loan,
-    "contact": contact,
-    "duration": duration,
-    "day": day,
-    "month": month,
-    "campaign": campaign,
-    "pdays": pdays,
-    "previous": previous,
-    "poutcome": poutcome
+    "age": age, "job": job, "marital": marital, "education": education, "default": default,
+    "balance": balance, "housing": housing, "loan": loan, "contact": contact, "duration": duration,
+    "day": day, "month": month, "campaign": campaign, "pdays": pdays, "previous": previous, "poutcome": poutcome
 }])
 
-# ===============================
-# Prediction
-# ===============================
 st.markdown("### 🔍 Prediksi")
 
 if st.button("Predict"):
@@ -106,15 +80,10 @@ if st.button("Predict"):
             pred = model_gb.predict(input_data)[0]
 
         else:
-            voting_model = VotingClassifier(
-                estimators=[
-                    ("lr", model_lr),
-                    ("gb", model_gb)
-                ],
-                voting="hard"
-            )
-            voting_model.fit([[0]], ["no"])  # dummy fit (required by VotingClassifier API)
-            pred = voting_model.predict(input_data)[0]
+            pred_lr = model_lr.predict(input_data)[0]
+            pred_gb = model_gb.predict(input_data)[0]
+            votes = [pred_lr, pred_gb]
+            pred = max(set(votes), key=votes.count)
 
         if pred == "yes":
             st.success("💚 Nasabah BERMINAT mengambil term deposit.")
