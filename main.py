@@ -1,96 +1,104 @@
 import streamlit as st
-import joblib
 import os
-import sklearn
+import json
+import numpy as np
+import joblib
 import pandas as pd
+import sklearn
+import sys
+import traceback
 
-st.set_page_config(page_title="DEBUG MODE", layout="centered")
+st.set_page_config(page_title="DEBUG MODE — Model Loader", layout="wide")
 
-st.title("STREAMLIT DEBUG MODE — MODEL LOADER")
-
-# ==========================================================
-# SHOW ENVIRONMENT INFORMATION
-# ==========================================================
-st.subheader("Environment Info")
-
-st.write("Python Version:")
-st.code(os.popen("python --version").read())
-
-st.write("Installed scikit-learn version:")
-st.code(sklearn.__version__)
-
-st.subheader("Current Working Directory")
-st.code(os.getcwd())
-
-st.subheader("Files in Directory")
-st.code(os.listdir())
+st.title("🛠 DEBUG MODE — Manual Preprocessor & Model Loader")
 
 # ==========================================================
-# TRY LOADING MODELS
+# 1. Environment Info
 # ==========================================================
-def try_load(file):
-    st.write(f"Testing load for: {file}")
-    if file not in os.listdir():
-        st.error(f"File {file} NOT FOUND in directory.")
-        return None
+st.header("📌 Environment Info")
+
+st.write("**Python Version:**", sys.version)
+st.write("**NumPy Version:**", np.__version__)
+st.write("**Pandas Version:**", pd.__version__)
+st.write("**Scikit-learn Version:**", sklearn.__version__)
+
+# ==========================================================
+# 2. List Files
+# ==========================================================
+st.header("📂 Files in Working Directory")
+
+files = os.listdir(".")
+st.json(files)
+
+required_files = [
+    "model_logreg.pkl",
+    "model_gb.pkl",
+    "columns.json",
+    "scaler_mean.npy",
+    "scaler_std.npy"
+]
+
+st.write("### Expected Files:")
+st.json(required_files)
+
+missing = [f for f in required_files if f not in files]
+
+if missing:
+    st.error("❌ Missing files:")
+    st.json(missing)
+else:
+    st.success("✅ All required files found!")
+
+# ==========================================================
+# 3. File Loader Function
+# ==========================================================
+def try_load_file(path, loader):
+    st.subheader(f"Testing load for: **{path}**")
     try:
-        obj = joblib.load(file)
-        st.success(f"{file} successfully loaded!")
-        st.write("Type:", type(obj))
+        obj = loader(path)
+        st.success(f"✅ Loaded successfully: {path}")
         return obj
     except Exception as e:
-        st.error(f"Error while loading {file}:")
-        st.exception(e)
+        st.error(f"❌ Error loading {path}: {e}")
+        st.code(traceback.format_exc())
         return None
 
-st.subheader("Model Loading Tests")
+# ==========================================================
+# 4. Test loading each file
+# ==========================================================
+st.header("🔍 TEST LOADING FILES")
 
-pre = try_load("preprocessor.pkl")
-lr = try_load("model_logreg.pkl")
-gb = try_load("model_gb.pkl")
+# Load JSON
+def load_json(p):
+    with open(p, "r") as f:
+        return json.load(f)
+
+columns = try_load_file("columns.json", load_json)
+
+# Load NumPy arrays
+mean_vals = try_load_file("scaler_mean.npy", np.load)
+std_vals  = try_load_file("scaler_std.npy", np.load)
+
+# Load model files
+model_lr = try_load_file("model_logreg.pkl", joblib.load)
+model_gb = try_load_file("model_gb.pkl", joblib.load)
 
 # ==========================================================
-# OPTIONAL TEST: Transformation / Prediction
+# 5. Display Loaded Objects
 # ==========================================================
-st.subheader("Testing Transformation & Prediction")
+st.header("📦 LOADED OBJECTS SUMMARY")
 
-if pre is not None:
-    try:
-        st.write("Inspecting preprocessor expected input columns...")
-        if hasattr(pre, "feature_names_in_"):
-            st.code(pre.feature_names_in_)
-        else:
-            st.warning("Preprocessor has no attribute feature_names_in_")
-    except Exception as e:
-        st.error("Error inspecting preprocessor:")
-        st.exception(e)
+loaded = {
+    "columns.json loaded": columns is not None,
+    "scaler_mean.npy loaded": mean_vals is not None,
+    "scaler_std.npy loaded": std_vals is not None,
+    "model_logreg.pkl loaded": model_lr is not None,
+    "model_gb.pkl loaded": model_gb is not None,
+}
 
-if pre is not None and lr is not None:
-    try:
-        st.write("Creating fake input dataframe for testing...")
+st.json(loaded)
 
-        try:
-            fake_cols = list(pre.feature_names_in_)
-        except:
-            fake_cols = ["age","job","marital","education","default",
-                         "balance","housing","loan","contact","duration",
-                         "day","month","campaign","pdays","previous","poutcome"]
-
-        fake_df = pd.DataFrame([{col: 0 for col in fake_cols}])
-        st.code(fake_df.head())
-
-        st.write("Transforming fake input...")
-        transformed = pre.transform(fake_df)
-
-        st.success("Transformation SUCCESSFUL!")
-        st.write("Transformed shape:", transformed.shape)
-
-        st.write("Trying prediction with Logistic Regression...")
-        pred = lr.predict(transformed)
-        st.success(f"Prediction: {pred}")
-
-    except Exception as e:
-        st.error("Transformation / prediction FAILED:")
-        st.exception(e)
+if all(loaded.values()):
+    st.success("🎉 ALL FILES SUCCESSFULLY LOADED — READY FOR main.py!")
 else:
-    st.info("Not enough components to test transformation/prediction.")
+    st.error("⚠️ Some files FAILED to load. Please fix the above errors.")
